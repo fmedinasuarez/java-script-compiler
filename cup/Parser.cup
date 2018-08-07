@@ -1,0 +1,154 @@
+import java.util.*;
+import java.lang.String;
+import java_cup.runtime.*;
+
+parser code {:
+	public void syntax_error(Symbol s){
+		if(s.value==null)
+			throw new ParsingException("ERROR sintáctico en la linea " + (s.left+1) +": falta algun simbolo.");
+		else
+			throw new ParsingException("ERROR sintáctico: simbolo \""+ s.value + "\" no esperado en la linea " + (s.left+1) +", columna " + (s.right+1));
+	}
+	public void unrecovered_syntax_error(Symbol s) throws java.lang.Exception{
+	}
+:};
+
+terminal IDENTIFIER, ASIGN, OR, AND, IGUAL, DISTINTO, MENOR, MAYOR, MENORIGUAL, MAYORIGUAL, SUMA, RESTA, MULT, DIV;
+terminal MASMAS, MENOSMENOS, NOT, PUNTO, PIZQ, PDER, NULL, TRUE, FALSE, INTEGER, PRIZQ, PRDER, FUNCTION, LLAVEIZQ, LLAVEDER;
+terminal VAR, ELSE, IF, FOR, CONTINUE, BREAK, RETURN, PUNTOYCOMA, COMA, FLOAT; 
+terminal String  STRING;
+
+non terminal Program program, topStatements;
+non terminal Statement topStatement, statement, variableDefinition, assignmentExpression, ifStatement, block, functionDefinition;
+non terminal Statement returnStatement, forStatement;
+non terminal Expression optionalExpression, logicalOrExpression, logicalAndExpression, equalityExpression, relationalExpression, parenthesizedExpression, arrayLiteral, forCondition;
+non terminal Expression additiveExpression, multiplicativeExpression, unaryExpression, postfixExpression, callExpression, simpleExpression, variableInitializer, callExpressionPredef;
+non terminal block_statement blockStatements;
+non terminal Variable forInitializer,forActualizer;
+non terminal ArrayList<Expression> elementList, argumentList, arguments, formalParametersPrefix, formalParameters;
+
+program ::= topStatements:tss {:RESULT = tss;:};
+			  
+topStatements ::= topStatements:p topStatement:ts {:RESULT = p.addStatement(ts);:}
+			  |{:RESULT = new Program();:};
+
+topStatement ::= statement:s {:RESULT = s;:}
+             | functionDefinition:fd {:RESULT = fd;:};
+			 
+statement ::= assignmentExpression:ae PUNTOYCOMA {:RESULT = ae;:}
+		  | variableDefinition:vd PUNTOYCOMA {:RESULT = vd;:}		  
+          | block:b {:RESULT = b;:}
+          | ifStatement:ifs {:RESULT = ifs;:}
+          | forStatement:fs {:RESULT = fs;:}
+          | returnStatement:re PUNTOYCOMA {:RESULT = re;:}
+          | CONTINUE:c PUNTOYCOMA {:RESULT = new continue_statement(cleft+1,cright+1);:}
+          | BREAK:b PUNTOYCOMA {:RESULT = new break_statement(bleft+1,bright+1);:};
+                   		   		   		   
+optionalExpression ::= logicalOrExpression:lo {:RESULT = lo;:}
+                   |{:RESULT = new Expression(tipoExpresion.UNDEFINED);:};
+		   
+assignmentExpression ::= IDENTIFIER:id ASIGN logicalOrExpression:e {:RESULT = new Variable(id,e,false);:}
+                     | logicalOrExpression:lo {:RESULT = lo;:};
+
+logicalOrExpression ::= logicalAndExpression:la {:RESULT = la;:}
+                    | logicalOrExpression:l OR:o logicalAndExpression:r {:RESULT = new Expression("||",l,r,tipoExpresion.BINARIA,oleft+1,oright+1);:};
+
+logicalAndExpression ::=  equalityExpression:ee {:RESULT = ee;:}
+                     | logicalAndExpression:l AND:a equalityExpression:r {:RESULT = new Expression("&&",l,r,tipoExpresion.BINARIA,aleft+1,aright+1);:};
+					 
+equalityExpression ::= relationalExpression:re {:RESULT = re;:}
+                   | equalityExpression:l IGUAL:i relationalExpression:r {:RESULT = new Expression("==",l,r,tipoExpresion.BINARIA,ileft+1,iright+1);:}
+                   | equalityExpression:l DISTINTO:d relationalExpression:r {:RESULT = new Expression("!=",l,r,tipoExpresion.BINARIA,dleft+1,dright+1);:};
+				   
+relationalExpression ::= additiveExpression:ae {:RESULT = ae;:}
+                     | relationalExpression:l MENOR:m additiveExpression:r {:RESULT = new Expression("<",l,r,tipoExpresion.BINARIA,mleft+1,mright+1);:}
+                     | relationalExpression:l MAYOR:m additiveExpression:r {:RESULT = new Expression(">",l,r,tipoExpresion.BINARIA,mleft+1,mright+1);:}
+                     | relationalExpression:l MENORIGUAL:m additiveExpression:r {:RESULT = new Expression("<=",l,r,tipoExpresion.BINARIA,mleft+1,mright+1);:}
+                     | relationalExpression:l MAYORIGUAL:m additiveExpression:r {:RESULT = new Expression(">=",l,r,tipoExpresion.BINARIA,mleft+1,mright+1);:};
+					 
+additiveExpression ::= multiplicativeExpression:me {:RESULT = me;:}
+                    | additiveExpression:l SUMA:s multiplicativeExpression:r {:RESULT = new Expression("+",l,r,tipoExpresion.BINARIA,sleft+1,sright+1);:}
+                    | additiveExpression:l RESTA:re multiplicativeExpression:r {:RESULT = new Expression("-",l,r,tipoExpresion.BINARIA,releft+1,reright+1);:}
+                    | RESTA:re multiplicativeExpression:r {:RESULT = new Expression("-",r,tipoExpresion.UNARIA,releft+1,reright+1);:}; 
+					
+multiplicativeExpression ::= unaryExpression:ue {:RESULT = ue;:}
+                         | multiplicativeExpression:l MULT:m unaryExpression:r {:RESULT = new Expression("*",l,r,tipoExpresion.BINARIA,mleft+1,mright+1);:}
+                         | multiplicativeExpression:l DIV:d unaryExpression:r {:RESULT = new Expression("/",l,r,tipoExpresion.BINARIA,dleft+1,dright+1);:};
+						 
+unaryExpression ::= postfixExpression:pe {:RESULT = pe;:}
+                |  MASMAS:m callExpressionPredef:r {:RESULT = new Expression("++",r,tipoExpresion.UNARIA,mleft+1,mright+1);:}
+                |  MENOSMENOS:m callExpressionPredef:r {:RESULT = new Expression("--",r,tipoExpresion.UNARIA,mleft+1,mright+1);:}
+                |  NOT:n unaryExpression:r {:RESULT = new Expression("!",r,tipoExpresion.UNARIA,nleft+1,nright+1);:};
+						 
+postfixExpression ::= callExpressionPredef:ce {:RESULT = ce;:}
+                  |  callExpressionPredef:l MASMAS:m {:RESULT = new Expression("++",l,tipoExpresion.UNARIA,mleft+1,mright+1);:}
+                  |  callExpressionPredef:l MENOSMENOS:m {:RESULT = new Expression("--",l,tipoExpresion.UNARIA,mleft+1,mright+1);:};
+
+callExpressionPredef ::= callExpression:ce {:RESULT = ce;:}
+                     |  callExpressionPredef:cep PUNTO:p IDENTIFIER:id {:RESULT = new Expression(".",cep,new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1),tipoExpresion.FUNCTION_PREDEF,pleft+1,pright+1);:}
+                     |  callExpressionPredef:cep PUNTO:p IDENTIFIER:id arguments:args {:RESULT = new Expression(".",cep,new Expression(id,args,tipoExpresion.IDENTIFIER,idleft+1,idright+1),tipoExpresion.FUNCTION_PREDEF,pleft+1,pright+1);:};
+                     
+callExpression ::= simpleExpression:se {:RESULT = se;:}
+               |  callExpression:ce arguments:args {:RESULT = new Expression(ce.getValue(),args,tipoExpresion.FUNCTION_CALL,celeft+1,ceright+1);:}
+			   |  callExpression:ce PRIZQ:p logicalOrExpression:lo PRDER {:ArrayList<Expression> arg = new ArrayList<Expression>(); arg.add((Expression)lo); RESULT = new Expression(ce.getValue(),arg,tipoExpresion.ARRAY_ELEMENT,celeft+1,ceright+1);:};
+
+simpleExpression ::= NULL:n {:RESULT = new Expression(n,tipoExpresion.NULL,nleft+1,nright+1);:} 
+                 | TRUE:t {:RESULT = new Expression(t,tipoExpresion.BOOLEAN,tleft+1,tright+1);:} 
+                 | FALSE:f {:RESULT = new Expression(f,tipoExpresion.BOOLEAN,fleft+1,fright+1);:}
+                 | INTEGER:i {:RESULT = new Expression(i,tipoExpresion.INTEGER,ileft+1,iright+1);:}
+                 | FLOAT:f {:RESULT = new Expression(f,tipoExpresion.FLOAT,fleft+1,fright+1);:}
+				 | STRING:s {:RESULT = new Expression(s,tipoExpresion.STRING,sleft+1,sright+1);:}
+                 | IDENTIFIER:id {:RESULT = new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1);:}
+                 | parenthesizedExpression:pe {:RESULT = pe;:}
+                 | arrayLiteral:a {:RESULT = a;:};
+
+parenthesizedExpression ::= PIZQ logicalOrExpression:lo PDER {:RESULT = lo;:};
+			   
+arguments ::= PIZQ PDER {:RESULT = new ArrayList<Expression>();:}
+          |  PIZQ argumentList:al PDER {:RESULT = al;:};
+		  
+argumentList ::= logicalOrExpression:lo {:ArrayList<Expression> args = new ArrayList<Expression>(); args.add(lo); RESULT = args;:}
+             | argumentList:al COMA logicalOrExpression:lo {:al.add(lo) ; RESULT = al;:};
+
+arrayLiteral ::= PRIZQ:p PRDER {:RESULT = new Expression(null,new ArrayList<Expression>(),tipoExpresion.ARRAY,pleft+1,pright+1);:}
+             |PRIZQ:p elementList:e PRDER {:RESULT = new Expression(null,e,tipoExpresion.ARRAY,pleft+1,pright+1);:};
+			 
+elementList ::= elementList:e COMA logicalOrExpression:lo {:e.add(lo) ; RESULT = e;:}
+            | logicalOrExpression:lo {:ArrayList<Expression> args = new ArrayList<Expression>(); args.add(lo); RESULT = args;:};
+            
+functionDefinition ::= FUNCTION IDENTIFIER:id PIZQ formalParameters:arguments PDER block:b {:RESULT = new function_statement(id,arguments,((block_statement)b).getSentencias(),idleft+1,idright+1);:};
+
+formalParameters ::= formalParametersPrefix:args {:RESULT = args;:}
+                 |{:RESULT = new ArrayList<Expression>();:};
+				 
+formalParametersPrefix ::= IDENTIFIER:id {:ArrayList<Expression> args = new ArrayList<Expression>();args.add(new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1)); RESULT = args;:}
+                       | formalParametersPrefix:args COMA IDENTIFIER:id {:args.add(new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1)); RESULT = args;:};
+
+variableDefinition ::= VAR IDENTIFIER:id variableInitializer:vi {:RESULT = new Variable(id,vi,true);:};
+
+variableInitializer ::= ASIGN logicalOrExpression:lo {:RESULT = lo;:}
+                    |{:RESULT = new Expression(tipoExpresion.UNDEFINED);:};
+					
+block ::= LLAVEIZQ blockStatements:b LLAVEDER {:RESULT = b;:};
+
+blockStatements ::= {:RESULT = new block_statement();:}
+                | blockStatements:bs statement:s {:RESULT = bs.addStatement(s);:};
+					  
+ifStatement ::= IF parenthesizedExpression:e block:b {:RESULT = new if_statement(e,((block_statement)b).getSentencias());:}
+            | IF parenthesizedExpression:e block:b ELSE block:be {:RESULT = new if_statement(e,((block_statement)b).getSentencias(),((block_statement)be).getSentencias());:};
+			
+forStatement ::= FOR PIZQ forInitializer:vi PUNTOYCOMA forCondition:fc PUNTOYCOMA forActualizer:fa PDER block:be {:RESULT = new for_statement(vi,fc,fa,((block_statement)be).getSentencias());:};
+
+forInitializer ::= VAR IDENTIFIER:id ASIGN logicalOrExpression:lo {:RESULT = new Variable(id,lo,true);:}
+               | IDENTIFIER:id ASIGN logicalOrExpression:lo {:RESULT = new Variable(id,lo,false);:}
+               | {:RESULT = new Variable("idaux",new Expression(tipoExpresion.NULL),true);:};
+               
+forCondition ::= logicalOrExpression:lo {:RESULT = lo;:}
+              | {:RESULT = new Expression(tipoExpresion.NULL);:};
+               
+forActualizer ::= IDENTIFIER:id MASMAS:m {:RESULT = new Variable(id,new Expression("++",new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1),tipoExpresion.UNARIA,mleft+1,mright+1),false);:}
+              | IDENTIFIER:id MENOSMENOS:m {:RESULT = new Variable(id,new Expression("--",new Expression(id,tipoExpresion.IDENTIFIER,idleft+1,idright+1),tipoExpresion.UNARIA,mleft+1,mright+1),false);:}
+              | forInitializer:fi {:RESULT = fi;:};
+             
+
+returnStatement ::= RETURN:r optionalExpression:oe {:RESULT = new return_statement(oe,rleft+1,rright+1);:};

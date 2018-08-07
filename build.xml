@@ -1,0 +1,46 @@
+ <project name="interpreteJS">
+	<taskdef name="jflex" classname="JFlex.anttask.JFlexTask" classpath="lib/JFlex.jar" />
+	<taskdef name="cup" classname="java_cup.anttask.CUPTask" classpath="lib/java-cup-11a.jar" />
+	
+	<target name="init">
+		<mkdir dir="classes" />
+		<path id="classpath">
+			<fileset dir="lib">
+				<include name="java-cup-11a-runtime.jar"/>
+			</fileset>
+		</path>
+	</target>
+	
+	<target name="jflex" depends="init">
+		<jflex file="jflex/Scanner.jflex" destdir="src" />
+	</target>
+	
+	<target name="cup" depends="jflex">
+		<cup srcfile="cup/Parser.cup" destdir="src" force="true" parser="parser" />
+	</target>
+
+	<target name="compile" depends="cup">
+		  <javac srcdir="src" destdir="classes"
+		         includeantruntime="false">
+			 <classpath refid="classpath"/>
+		  </javac>
+	</target>
+	
+	<target name="build" depends="compile">
+			<jar destfile="interpreteJS.jar" basedir="classes" >
+				<zipgroupfileset dir="lib" includes="java-cup-11a-runtime.jar" />
+				<manifest>
+					<attribute name="Main-Class" value="Main" ></attribute>
+				</manifest>
+			</jar>
+	</target>
+
+	<target name="clean">
+			<delete dir="classes" />
+			<delete file="src/parser.java" />
+			<delete file="src/sym.java" />
+			<delete file="src/Scanner.java" />
+			<delete file="interpreteJS.jar" />
+	</target>
+	
+</project>
